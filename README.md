@@ -24,12 +24,23 @@ The agent searches supported platforms, optionally fetches your resume to improv
 Results are saved to `exports/hunts/`. Format and columns are defined in `system-prompt.md`.
 
 
-## Setup
+## Web app (Next.js 16)
+
+```sh
+yarn install
+yarn dev
+```
+
+**AUTH_SECRET:** na raiz do repo, corre `yarn auth:secret` e cola o valor em `apps/web/.env.local` como `AUTH_SECRET="..."`.
+
+Configuração: copia `.env.example` para `apps/web/.env.local` e preenche `AUTH_*`, `DATABASE_URL`. Detalhes em [apps/web/README.md](apps/web/README.md).
+
+## Setup (CLI legado)
 
 ### 1. Install dependencies
 
 ```sh
-npm install
+yarn install
 ```
 
 Log in:
@@ -73,3 +84,11 @@ Results appear in `exports/hunts/`.
 ## Privacy
 
 `user-prompt.md` and `exports/` files are gitignored — your search criteria and results stay local.
+
+## Platform roadmap
+
+Product vision (Next.js 16, **Drizzle ORM**, **shadcn/ui**, Docker, **Supabase Postgres + Storage only**, **Auth.js + Google OAuth** (no Supabase Auth), **IA a partir do CV para estratégia**, pipeline de **candidaturas com link original**, lacunas de escopo, orçamento baixo, migração fácil), feature ideas, and improvements to this repo are documented in **[docs/plataforma-visao.md](docs/plataforma-visao.md)** (Portuguese).
+
+Auxiliary technical docs (database, architecture, design system, workers, external APIs): **[docs/README.md](docs/README.md)**.
+
+**Plano e o que já foi feito (PT):** **[docs/plano-estado.md](docs/plano-estado.md)**.
