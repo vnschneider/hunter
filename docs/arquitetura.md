@@ -21,7 +21,7 @@ flowchart TB
   end
   subgraph compute [Compute longo]
     Worker[Worker Docker]
-    Agent[Claude / agente + MCP]
+    Agent[Hunter MCP local]
   end
   subgraph external [Externo]
     Google[Google OAuth]
@@ -46,14 +46,14 @@ flowchart TB
 
 ## 2. Responsabilidades por componente
 
-| Componente | Responsabilidade | Não faz |
-|------------|------------------|---------|
-| **Next.js (App Router)** | UI, Server Actions / Route Handlers, validação Zod, **filtrar por `user_id` da sessão**, SSE de live | Não corre hunts longos no request HTTP síncrono |
-| **Auth.js** | Sessão, Google OAuth, `user.id` estável | Não substitui autorização na BD (isso é código servidor) |
-| **Postgres** | Fonte de verdade: hunts, jobs, applications, events | Não exposto directamente ao browser |
-| **Supabase Storage** | CVs e exports opcionais | Não público; sem URLs permanentes no cliente |
-| **Worker** | Dequeue `jobs`, executar agente, escrever resultados e eventos | Não serve HTTP ao utilizador final |
-| **Agente (Claude + MCP)** | Pesquisar vagas, scoring, chamadas Indeed MCP / navegação conforme `system-prompt` | Não decide política de negócio (limites de quota são do worker) |
+| Componente               | Responsabilidade                                                                                     | Não faz                                                         |
+| ------------------------ | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| **Next.js (App Router)** | UI, Server Actions / Route Handlers, validação Zod, **filtrar por `user_id` da sessão**, SSE de live | Não corre hunts longos no request HTTP síncrono                 |
+| **Auth.js**              | Sessão, Google OAuth, `user.id` estável                                                              | Não substitui autorização na BD (isso é código servidor)        |
+| **Postgres**             | Fonte de verdade: hunts, jobs, applications, events                                                  | Não exposto directamente ao browser                             |
+| **Supabase Storage**     | CVs e exports opcionais                                                                              | Não público; sem URLs permanentes no cliente                    |
+| **Worker**               | Dequeue `jobs`, executar agente, escrever resultados e eventos                                       | Não serve HTTP ao utilizador final                              |
+| **Hunter MCP**           | Pesquisar vagas, normalizar, deduplicar e pontuar openings                                           | Não decide política de negócio (limites de quota são do worker) |
 
 ---
 
@@ -90,18 +90,18 @@ flowchart TB
 1. Cliente abre EventSource para `GET /api/hunts/:id/stream` (SSE).
 2. Handler autentica sessão, verifica `hunt.user_id`, faz poll em `hunt_events` ou long-poll com cursor — **ou** lê incrementalmente desde último `id`.
 
-*(Realtime nativo do Supabase no browser fica de fora enquanto não houver JWT Supabase no cliente.)*
+_(Realtime nativo do Supabase no browser fica de fora enquanto não houver JWT Supabase no cliente.)_
 
 ---
 
 ## 4. Deploy sugerido (orçamento baixo)
 
-| Peça | Opção A | Opção B |
-|------|---------|---------|
-| Front | Vercel Hobby | Docker + Caddy numa VPS |
-| Worker | Mesma VPS que Redis-less | Máquina dedicada pequena |
-| Postgres + Storage | Supabase Free | — |
-| Segredos | Env no Vercel / `docker compose` secrets | |
+| Peça               | Opção A                                  | Opção B                  |
+| ------------------ | ---------------------------------------- | ------------------------ |
+| Front              | Vercel Hobby                             | Docker + Caddy numa VPS  |
+| Worker             | Mesma VPS que Redis-less                 | Máquina dedicada pequena |
+| Postgres + Storage | Supabase Free                            | —                        |
+| Segredos           | Env no Vercel / `docker compose` secrets |                          |
 
 **Variáveis críticas:** `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` (só servidor), `NEXTAUTH_SECRET`, `GOOGLE_*`, chaves do agente/LLM.
 

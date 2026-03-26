@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: hunter-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: hunter
+      POSTGRES_PASSWORD: hunter
+      POSTGRES_DB: hunter
+    ports:
+      - "5432:5432"
+    volumes:
+      - hunter_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hunter -d hunter"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    profiles: ["web"]
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.web
+    container_name: hunter-web
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL?DATABASE_URL is required and must point to the primary database}
+      AUTH_SECRET: ${AUTH_SECRET:-change-me}
+      AUTH_GOOGLE_ID: ${AUTH_GOOGLE_ID:-}
+      AUTH_GOOGLE_SECRET: ${AUTH_GOOGLE_SECRET:-}
+      NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
+      CV_STORAGE_BUCKET: ${CV_STORAGE_BUCKET:-cvs}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile.worker
+    container_name: hunter-worker
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL?DATABASE_URL is required and must point to the primary database}
+      HUNT_PIPELINE_MODE: ${HUNT_PIPELINE_MODE:-mcp}
+      WORKER_POLL_INTERVAL_MS: ${WORKER_POLL_INTERVAL_MS:-3000}
+      WORKER_MAX_BACKOFF_MINUTES: ${WORKER_MAX_BACKOFF_MINUTES:-60}
+      MCP_REQUEST_TIMEOUT_MS: ${MCP_REQUEST_TIMEOUT_MS:-120000}
+      MCP_INITIALIZE_TIMEOUT_MS: ${MCP_INITIALIZE_TIMEOUT_MS:-20000}
+      MCP_TOOL_RETRIES: ${MCP_TOOL_RETRIES:-2}
+      MCP_TOOL_RETRY_DELAY_MS: ${MCP_TOOL_RETRY_DELAY_MS:-1200}
+      MCP_SCORE_TOOL_RETRIES: ${MCP_SCORE_TOOL_RETRIES:-0}
+      MCP_SCORE_REQUEST_TIMEOUT_MS: ${MCP_SCORE_REQUEST_TIMEOUT_MS:-15000}
+      MCP_RANK_ENABLED: ${MCP_RANK_ENABLED:-0}
+      MCP_RANK_TOOL_RETRIES: ${MCP_RANK_TOOL_RETRIES:-0}
+      MCP_RANK_REQUEST_TIMEOUT_MS: ${MCP_RANK_REQUEST_TIMEOUT_MS:-8000}
+      MCP_SCORE_HTTP_TIMEOUT_MS: ${MCP_SCORE_HTTP_TIMEOUT_MS:-9000}
+      MCP_PROVIDER_TIMEOUT_MS: ${MCP_PROVIDER_TIMEOUT_MS:-25000}
+      HUNT_MAX_OPENINGS_FROM_SEARCH: ${HUNT_MAX_OPENINGS_FROM_SEARCH:-120}
+      HUNT_MAX_OPENINGS_TO_SCORE: ${HUNT_MAX_OPENINGS_TO_SCORE:-20}
+      HUNT_SCORE_CONCURRENCY: ${HUNT_SCORE_CONCURRENCY:-3}
+      HUNT_SCORE_LLM_TOP_K: ${HUNT_SCORE_LLM_TOP_K:-12}
+      HUNT_SCORE_LLM_MIN_HEURISTIC: ${HUNT_SCORE_LLM_MIN_HEURISTIC:-35}
+      HUNT_SCORE_PROGRESS_EVERY: ${HUNT_SCORE_PROGRESS_EVERY:-5}
+      HUNT_PERSIST_CONCURRENCY: ${HUNT_PERSIST_CONCURRENCY:-4}
+      HUNT_SCORE_TIMEOUT_CONTINUE: ${HUNT_SCORE_TIMEOUT_CONTINUE:-1}
+      HUNT_MAX_DURATION_MS: ${HUNT_MAX_DURATION_MS:-900000}
+      NOTIFY_INTERESTING_MATCH_SCORE: ${NOTIFY_INTERESTING_MATCH_SCORE:-80}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      GREENHOUSE_BOARD_TOKENS: ${GREENHOUSE_BOARD_TOKENS:-}
+      LEVER_SITES: ${LEVER_SITES:-}
+      LINKEDIN_PAGES: ${LINKEDIN_PAGES:-2}
+      NERDIN_PAGES: ${NERDIN_PAGES:-1}
+      LINKEDIN_SEARCH_URL: ${LINKEDIN_SEARCH_URL:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-gemini}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_MODEL: ${GROQ_MODEL:-llama-3.1-8b-instant}
+
+volumes:
+  hunter_pg_data:

@@ -1,6 +1,28 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cvs } from "@hunter/db/schema";
+import { NoDatabaseBanner } from "@/components/no-database-banner";
+import { getDb } from "@/lib/db";
+import { hasDatabase, requireUserId } from "@/lib/session";
+import { desc, eq } from "drizzle-orm";
+import { CVAnalysisForm } from "./cv-analysis-form";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const userId = await requireUserId();
+  const dbOk = hasDatabase();
+
+  const savedCvs = dbOk
+    ? await getDb()
+        .select({
+          id: cvs.id,
+          fileName: cvs.fileName,
+          sizeBytes: cvs.sizeBytes,
+          createdAt: cvs.createdAt,
+        })
+        .from(cvs)
+        .where(eq(cvs.userId, userId))
+        .orderBy(desc(cvs.createdAt))
+        .limit(20)
+    : [];
+
   return (
     <div className="space-y-6">
       <div>
@@ -9,18 +31,10 @@ export default function SettingsPage() {
           CV, estratégia de caça e integrações.
         </p>
       </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Em breve</CardTitle>
-          <CardDescription>
-            Upload de CV, assistente de IA e preferências de notificação.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground">
-          Variáveis de ambiente e Supabase Storage estão descritos em{" "}
-          <code className="rounded bg-muted px-1 py-0.5">docs/integracoes-externas.md</code>.
-        </CardContent>
-      </Card>
+
+      {!dbOk ? <NoDatabaseBanner /> : null}
+
+      <CVAnalysisForm savedCvs={savedCvs} />
     </div>
   );
 }

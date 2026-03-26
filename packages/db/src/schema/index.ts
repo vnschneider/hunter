@@ -75,9 +75,7 @@ export const cvs = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [
-    index("cvs_user_created_idx").on(t.userId, t.createdAt),
-  ],
+  (t) => [index("cvs_user_created_idx").on(t.userId, t.createdAt)],
 );
 
 export const strategies = pgTable(
@@ -89,7 +87,9 @@ export const strategies = pgTable(
       .references(() => profiles.userId, { onDelete: "cascade" }),
     cvId: uuid("cv_id").references(() => cvs.id, { onDelete: "set null" }),
     name: text("name").notNull(),
-    criteriaJson: jsonb("criteria_json").notNull().$type<Record<string, unknown>>(),
+    criteriaJson: jsonb("criteria_json")
+      .notNull()
+      .$type<Record<string, unknown>>(),
     promptText: text("prompt_text").notNull(),
     isActive: boolean("is_active").notNull().default(false),
     version: integer("version").notNull().default(1),
@@ -200,9 +200,7 @@ export const huntEvents = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [
-    index("hunt_events_hunt_created_idx").on(t.huntId, t.createdAt),
-  ],
+  (t) => [index("hunt_events_hunt_created_idx").on(t.huntId, t.createdAt)],
 );
 
 export const jobs = pgTable(
@@ -227,7 +225,5 @@ export const jobs = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [
-    index("jobs_queue_idx").on(t.status, t.runAfter),
-  ],
+  (t) => [index("jobs_queue_idx").on(t.status, t.runAfter)],
 );

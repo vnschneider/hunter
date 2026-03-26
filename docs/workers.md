@@ -8,7 +8,7 @@ Processo **longo** que corre **fora** do ciclo pedido/resposta do Next.js. Compl
 
 - Retirar trabalhos da tabela **`jobs`** (Postgres).
 - Carregar contexto da **`hunts`** + snapshot da estratégia.
-- Invocar o **agente** (CLI `claude` ou API/SDK, conforme implementação).
+- Invocar o pipeline **MCP local** para busca, deduplicação e score.
 - Persistir **`hunt_events`**, **`openings`**, **`applications`**, actualizar **`hunts.status`**.
 - Respeitar **timeouts**, **retries** e **limites de custo** (tokens / tempo).
 
@@ -40,47 +40,42 @@ COMMIT;
 
 ## 3. Ciclo de vida de um job `run_hunt`
 
-| Etapa | Acção |
-|-------|--------|
-| 1 | Claim job → `status = processing` |
-| 2 | Carregar `hunts`, `strategy_snapshot_json`, paths de CV se necessário |
-| 3 | Montar `system-prompt` + `user-prompt` (texto derivado do snapshot) |
-| 4 | Executar agente com env (modelo, MCP Indeed, etc.) |
-| 5 | Stream ou batch de logs → inserir `hunt_events` |
-| 6 | Normalizar vagas → `openings` + `applications` |
-| 7 | `hunts.status = completed` ou `failed` + `error_message` |
-| 8 | Job `done` ou `dead` (excedeu `max_attempts`) |
+| Etapa | Acção                                                                 |
+| ----- | --------------------------------------------------------------------- |
+| 1     | Claim job → `status = processing`                                     |
+| 2     | Carregar `hunts`, `strategy_snapshot_json`, paths de CV se necessário |
+| 3     | Montar filtros de busca a partir do `strategy_snapshot_json`          |
+| 4     | Executar pipeline MCP local (`search_openings` -> `rank_openings`)    |
+| 5     | Stream ou batch de logs → inserir `hunt_events`                       |
+| 6     | Normalizar vagas → `openings` + `applications`                        |
+| 7     | `hunts.status = completed` ou `failed` + `error_message`              |
+| 8     | Job `done` ou `dead` (excedeu `max_attempts`)                         |
 
 ---
 
 ## 4. Invocação do agente
 
-**Opção A — subprocesso (actual repo):**
+### Execução recomendada (actual)
 
-- `spawn` de `claude` com args como em `main.sh`.
-- Capturar **stdout/stderr** para `hunt_events`.
-- Variáveis: `AI_MODEL`, `REASONING_EFFORT`, paths dos prompts gerados em `/tmp` ou volume.
+- `HUNT_EXECUTOR=mcp` usa o servidor local em `apps/web/scripts/mcp/hunter-mcp-server.mjs`.
+- Pipeline no worker: `search_openings` -> `dedupe_openings` -> `score_opening_with_groq` -> `rank_openings`.
 
-**Opção B — API:**
+**MCP local:**
 
-- Se no futuro houver API oficial sem TTY, preferir para observabilidade.
-
-**MCP Indeed:**
-
-- Configuração via env ou ficheiro gerado no container (equivalente a `.mcp.json`); **não** commitar secrets.
+- Configuração via variáveis de ambiente do worker; **não** commitar secrets.
 
 ---
 
 ## 5. Variáveis de ambiente (worker)
 
-| Variável | Obrigatório | Descrição |
-|----------|-------------|-----------|
-| `DATABASE_URL` | sim | Postgres com permissões de escrita |
-| `SUPABASE_SERVICE_ROLE_KEY` | se usar Storage API no worker | upload de CSV export |
-| `ANTHROPIC_API_KEY` / credenciais do CLI | conforme stack | agente |
-| `HUNT_MAX_RUNTIME_MS` | recomendado | cancelamento cooperativo |
-| `HUNT_MAX_LLM_CALLS` | recomendado | orçamento por hunt |
-| `NODE_ENV` | sim | `production` |
+| Variável                    | Obrigatório                   | Descrição                                       |
+| --------------------------- | ----------------------------- | ----------------------------------------------- |
+| `DATABASE_URL`              | sim                           | Postgres com permissões de escrita              |
+| `SUPABASE_SERVICE_ROLE_KEY` | se usar Storage API no worker | upload de CSV export                            |
+| `GROQ_API_KEY`              | opcional                      | scoring com LLM (fallback heurístico sem chave) |
+| `HUNT_MAX_RUNTIME_MS`       | recomendado                   | cancelamento cooperativo                        |
+| `HUNT_MAX_LLM_CALLS`        | recomendado                   | orçamento por hunt                              |
+| `NODE_ENV`                  | sim                           | `production`                                    |
 
 Documentar no `.env.example` do pacote worker.
 
@@ -99,7 +94,7 @@ Documentar no `.env.example` do pacote worker.
 ```dockerfile
 # Esboço conceitual
 FROM node:22-alpine
-# instalar claude CLI / deps
+# instalar deps do monorepo
 WORKDIR /app
 COPY worker/ ./
 CMD ["node", "dist/index.js"]
@@ -119,12 +114,12 @@ CMD ["node", "dist/index.js"]
 
 ## 9. Falhas comuns
 
-| Problema | Mitigação |
-|----------|-----------|
-| MCP Indeed desligado | Retry + estado `failed` visível na UI |
-| Timeout longo | `HUNT_MAX_RUNTIME_MS` + hunt `failed` com mensagem clara |
-| Duplicar vagas | `normalized_url` + unique parcial |
-| Worker morre a meio | Job volta a `queued` se heartbeat expirar (opcional, fase 2) |
+| Problema             | Mitigação                                                    |
+| -------------------- | ------------------------------------------------------------ |
+| MCP Indeed desligado | Retry + estado `failed` visível na UI                        |
+| Timeout longo        | `HUNT_MAX_RUNTIME_MS` + hunt `failed` com mensagem clara     |
+| Duplicar vagas       | `normalized_url` + unique parcial                            |
+| Worker morre a meio  | Job volta a `queued` se heartbeat expirar (opcional, fase 2) |
 
 ---
 

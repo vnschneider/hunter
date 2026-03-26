@@ -10,9 +10,16 @@ export function NoDatabaseBanner() {
       <div>
         <p className="font-medium">Base de dados não configurada</p>
         <p className="mt-1 text-muted-foreground">
-          Define <code className="rounded bg-muted px-1 py-0.5 text-xs">DATABASE_URL</code>{" "}
-          em <code className="rounded bg-muted px-1 py-0.5 text-xs">apps/web/.env.local</code>{" "}
-          e corre <code className="rounded bg-muted px-1 py-0.5 text-xs">yarn db:push</code> na raiz do monorepo.
+          Define{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            DATABASE_URL
+          </code>{" "}
+          em <code className="rounded bg-muted px-1 py-0.5 text-xs">.env</code>{" "}
+          e corre{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            yarn db:push
+          </code>{" "}
+          na raiz do monorepo.
         </p>
       </div>
     </div>

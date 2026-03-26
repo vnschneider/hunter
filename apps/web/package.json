@@ -7,17 +7,22 @@
     "build": "next build",
     "start": "next start",
     "lint": "tsc --noEmit",
-    "lint:eslint": "eslint src --max-warnings 0"
+    "lint:eslint": "eslint src --max-warnings 0",
+    "mcp:server": "node scripts/mcp/hunter-mcp-server.mjs",
+    "worker": "node scripts/worker.mjs",
+    "worker:once": "node scripts/worker.mjs --once"
   },
   "dependencies": {
     "@hunter/db": "*",
     "@radix-ui/react-slot": "^1.1.2",
+    "@supabase/supabase-js": "^2.100.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "drizzle-orm": "^0.39.3",
     "lucide-react": "^0.469.0",
     "next": "^16.0.0",
     "next-auth": "^5.0.0-beta.25",
+    "pdf-parse": "1.1.1",
     "postgres": "^3.4.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -26,6 +31,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.5",
+    "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.0.6",
     "@types/react-dom": "^19.0.2",
     "autoprefixer": "^10.4.20",

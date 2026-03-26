@@ -1,6 +1,6 @@
 # Hunter Platform — Visão, arquitetura e roadmap
 
-Documento de referência para evoluir o **hunter** (agente CLI + prompts + MCP) numa **plataforma containerizada** com painel web (**Next.js 16**, **shadcn/ui**), **Drizzle ORM** sobre **Postgres + Storage via Supabase** (sem usar o auth do Supabase), **Auth.js (NextAuth) com Google OAuth**, **assistência de IA para CV e estratégia de caça** (equivalente rico ao `user-prompt`), **visibilidade clara das candidaturas** (com link original da vaga), observabilidade em tempo quase real e gestão do ciclo de vida das “caçadas” — com **foco em orçamento pequeno** e **facilidade de migração** para outro Postgres / outro object storage.
+Documento de referência para evoluir o **hunter** (worker + MCP + painel web) numa **plataforma containerizada** com painel web (**Next.js 16**, **shadcn/ui**), **Drizzle ORM** sobre **Postgres + Storage via Supabase** (sem usar o auth do Supabase), **Auth.js (NextAuth) com Google OAuth**, **assistência de IA para CV e estratégia de caça**, **visibilidade clara das candidaturas** (com link original da vaga), observabilidade em tempo quase real e gestão do ciclo de vida das “caçadas” — com **foco em orçamento pequeno** e **facilidade de migração** para outro Postgres / outro object storage.
 
 **Documentação auxiliar (detalhe técnico):** [Índice `docs/README.md`](README.md) — [Estrutura do banco](estrutura-banco.md) · [Arquitetura geral](arquitetura.md) · [Design system / UI kit](design-system.md) · [Workers](workers.md) · [Integrações e APIs externas](integracoes-externas.md).
 
@@ -8,15 +8,15 @@ Documento de referência para evoluir o **hunter** (agente CLI + prompts + MCP) 
 
 ## 1. O que existe hoje (baseline)
 
-| Peça | Função |
-|------|--------|
-| `main.sh` | Invoca o CLI `claude` com `system-prompt.md` + `user-prompt.md` |
-| `system-prompt.md` | Comportamento do agente, plataformas, formato CSV |
-| `user-prompt.md` | Critérios pessoais (gitignored) |
-| `.mcp.json` | MCP remoto da Indeed |
-| `exports/hunts/` | Saída CSV local (gitignored) |
+| Peça                          | Função                                               |
+| ----------------------------- | ---------------------------------------------------- |
+| `apps/web/src`                | Aplicação web (dashboard, auth e APIs)               |
+| `apps/web/scripts/worker.mjs` | Worker de fila (jobs/hunts)                          |
+| `apps/web/scripts/mcp`        | Servidor MCP local e conectores                      |
+| `packages/db`                 | Schema e comandos Drizzle                            |
+| `docker-compose.yml`          | Orquestração local (postgres + worker, web opcional) |
 
-**Limitações para uma plataforma:** execução manual, sem API, sem persistência centralizada, sem controlo fino (pausar, agendar, auditar), sem UI para relatórios temporais ou streaming de logs — e sem registo estruturado de **candidaturas** nem **assistente** para gerar estratégia a partir do CV.
+**Limitações actuais:** SSE/live e relatórios por período ainda estão em evolução; faltam etapas de hardening operacional para produção.
 
 ---
 
@@ -45,13 +45,13 @@ Tudo empacotável em **Docker** (worker + opcionalmente front self-hosted). **N�
 
 ### 3.1 Já mencionadas por ti
 
-| Funcionalidade | Notas de implementação |
-|----------------|-------------------------|
-| **Docker** | `Dockerfile` multi-stage para Next.js; imagem separada para o worker; `docker-compose` com rede interna, volumes para artefactos opcionais, secrets via env / Docker secrets. |
-| **Painel Next.js 16** | App Router; rotas para Dashboard, Hunts, Configuração, Relatórios, Candidaturas, CV/Estratégia, Admin do serviço. |
+| Funcionalidade                       | Notas de implementação                                                                                                                                                                                                                                                     |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Docker**                           | `Dockerfile` multi-stage para Next.js; imagem separada para o worker; `docker-compose` com rede interna, volumes para artefactos opcionais, secrets via env / Docker secrets.                                                                                              |
+| **Painel Next.js 16**                | App Router; rotas para Dashboard, Hunts, Configuração, Relatórios, Candidaturas, CV/Estratégia, Admin do serviço.                                                                                                                                                          |
 | **Movimentação em tempo quase real** | **Recomendado (com NextAuth):** **SSE ou polling** exposto por **Route Handlers** no Next, com dados filtrados pela sessão — sem depender de `auth.uid()` do Supabase. **Supabase Realtime** fica **opcional** (exige JWT compatível ou canais só servidor, mais fricção). |
-| **Relatório por período** | Filtros: data início/fim, plataforma, score mínimo; agregados via SQL (Postgres) na API. |
-| **Play / pause do serviço** | Definir: (a) pausar *scheduler*, (b) pausar hunt em curso, (c) pausar worker. API: `POST /service/state`. |
+| **Relatório por período**            | Filtros: data início/fim, plataforma, score mínimo; agregados via SQL (Postgres) na API.                                                                                                                                                                                   |
+| **Play / pause do serviço**          | Definir: (a) pausar _scheduler_, (b) pausar hunt em curso, (c) pausar worker. API: `POST /service/state`.                                                                                                                                                                  |
 
 ### 3.2 Sugestões adicionais (alto valor)
 
@@ -77,22 +77,22 @@ Tudo empacotável em **Docker** (worker + opcionalmente front self-hosted). **N�
 
 **Regras de produto:** a IA **sugere**; a decisão final é sempre humana.
 
-*Detalhes de custo na secção 10.*
+_Detalhes de custo na secção 10._
 
 ### 3.4 Candidaturas: link original e estados claros
 
 **Objetivo:** painel onde cada linha é uma **candidatura** (ou intenção) com:
 
-| Campo (exemplo) | Descrição |
-|-----------------|-----------|
-| `opening_title` | Título da vaga |
-| **`opening_url`** | **Link canónico / original** (Indeed, Gupy, issue GitHub, etc.) |
-| `platform` | Indeed, backend-br, … |
-| `status` | `suggested` → `shortlisted` → `queued` → `applying` → `applied` / `failed` / `skipped` |
-| `match_score` | 0–100 (da última hunt) |
-| `hunt_id` | Ligação à execução que originou |
-| `notes` | Erro, motivo de skip, etc. |
-| `applied_at` | Quando concluído |
+| Campo (exemplo)   | Descrição                                                                              |
+| ----------------- | -------------------------------------------------------------------------------------- |
+| `opening_title`   | Título da vaga                                                                         |
+| **`opening_url`** | **Link canónico / original** (Indeed, Gupy, issue GitHub, etc.)                        |
+| `platform`        | Indeed, backend-br, …                                                                  |
+| `status`          | `suggested` → `shortlisted` → `queued` → `applying` → `applied` / `failed` / `skipped` |
+| `match_score`     | 0–100 (da última hunt)                                                                 |
+| `hunt_id`         | Ligação à execução que originou                                                        |
+| `notes`           | Erro, motivo de skip, etc.                                                             |
+| `applied_at`      | Quando concluído                                                                       |
 
 **Importante:** o **URL original** nunca deve ser perdido na normalização; se houver redirect, guardar também `source_url` e `canonical_url` se descobrires ambos.
 
@@ -153,19 +153,19 @@ flowchart LR
 
 ## 5. Stack sugerida (mínimo viável → produção)
 
-| Camada | Sugestão |
-|--------|----------|
-| UI | Next.js 16, React 19.x, **shadcn/ui** (Radix + Tailwind), tipografia e tokens consistentes |
-| Auth | **Auth.js (NextAuth) + Google OAuth** |
-| ORM / dados | **Drizzle ORM** + `postgres`/`pg` driver — schema em TypeScript, queries tipadas, **drizzle-kit** para migrações geradas a partir do código |
-| API | Next Route Handlers / Server Actions; **sem** expor cliente Drizzle no browser — só camada servidor |
-| Dados estruturados | **Postgres** (Supabase como host) |
-| Ficheiros (CV) | **Supabase Storage** via SDK **só no servidor** (upload assinado ou proxy) |
-| Validação | **Zod** (/forms + input de IA) alinhado aos tipos do Drizzle onde fizer sentido |
-| Fila | Postgres (`jobs` + `SKIP LOCKED`), sem Redis no MVP |
-| Worker | Docker: Node ou imagem com Claude Code + deps; **mesmo `DATABASE_URL`** e Drizzle opcional no worker para escritas tipadas |
-| Reverse proxy | Caddy com TLS em VPS barata, ou Vercel Hobby para o Next |
-| Observabilidade | Logs JSON no stdout do worker; Sentry opcional (free tier limitado) |
+| Camada             | Sugestão                                                                                                                                    |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| UI                 | Next.js 16, React 19.x, **shadcn/ui** (Radix + Tailwind), tipografia e tokens consistentes                                                  |
+| Auth               | **Auth.js (NextAuth) + Google OAuth**                                                                                                       |
+| ORM / dados        | **Drizzle ORM** + `postgres`/`pg` driver — schema em TypeScript, queries tipadas, **drizzle-kit** para migrações geradas a partir do código |
+| API                | Next Route Handlers / Server Actions; **sem** expor cliente Drizzle no browser — só camada servidor                                         |
+| Dados estruturados | **Postgres** (Supabase como host)                                                                                                           |
+| Ficheiros (CV)     | **Supabase Storage** via SDK **só no servidor** (upload assinado ou proxy)                                                                  |
+| Validação          | **Zod** (/forms + input de IA) alinhado aos tipos do Drizzle onde fizer sentido                                                             |
+| Fila               | Postgres (`jobs` + `SKIP LOCKED`), sem Redis no MVP                                                                                         |
+| Worker             | Docker: Node com dependências do monorepo; **mesmo `DATABASE_URL`** e Drizzle opcional no worker para escritas tipadas                      |
+| Reverse proxy      | Caddy com TLS em VPS barata, ou Vercel Hobby para o Next                                                                                    |
+| Observabilidade    | Logs JSON no stdout do worker; Sentry opcional (free tier limitado)                                                                         |
 
 ### 5.1 Drizzle — notas de uso
 
@@ -194,18 +194,18 @@ Objectivo duplo: (1) **confiança** — dados sensíveis e decisões de carreira
 
 Aqui “premium” não significa ornamentos pesados: significa **consistência**, **previsibilidade** e **continuidade** — o utilizador sente que **nada falha em silêncio** e que cada ecrã pertence ao mesmo produto.
 
-| Área | O que cobrir |
-|------|----------------|
-| **Ritmo visual** | Espaçamento em **grid 4/8px**; alturas de linha e tamanhos de título consistentes; **cards** com mesma sombra/borda em todo o painel (tokens Tailwind centralizados). |
-| **Fluidez entre ecrãs** | **View Transitions** (React 19 / Next) ou transições **CSS leves** entre rotas do painel — evitar “flash” branco; **Suspense** com fallbacks alinhados ao layout final para **sem layout shift** (CLS). |
-| **Micro-interacções** | Hover/focus em linhas de tabela, botões e `DropdownMenu` com transições **curtas** (150–200ms); estados `disabled` com explicação (tooltip “Pausa o serviço primeiro”). |
-| **Fluxos completos** | Cada fluxo tem **início → carregamento → sucesso → erro → recuperação**: upload de CV, gerar estratégia com IA, iniciar hunt, ver live, exportar CSV. Não deixar “dead ends” sem próximo passo sugerido. |
-| **Optimistic UI (onde seguro)** | Marcar candidatura como “applied” pode actualizar a linha **antes** da resposta do servidor, com **reversão** se falhar — só onde o risco for aceitável. |
-| **Comando e velocidade** | **Paleta de comandos** (`Command` + atalho tipo `⌘K`) para saltar para Hunts, Candidaturas, Configuração — sensação “pro” sem obrigar rato. Atalhos documentados em `?` ou tooltip. |
-| **Densidade controlada** | Modo “compacto” opcional em tabelas (menos padding) para power users; **default** confortável para leitura longa. |
-| **Mobile / tablet** | Sidebar colapsável ou navegação inferior em viewports pequenas; **áreas de toque** ≥ 44px; tabelas com **scroll horizontal** claro ou vista em cards empilhados. |
-| **Live / SSE** | Stream de eventos com **auto-scroll** opcional, **pausa** no scroll manual, contador “última actualização há Xs” — evita sensação de log a “piscar” sem contexto. |
-| **Profundidade sem ruído** | Sombras **em camadas** (elevação 1–2 níveis), bordas `border` subtis em vez de tudo flat; **separadores** consistentes — detalhe que transmite “acabado”. |
+| Área                            | O que cobrir                                                                                                                                                                                             |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ritmo visual**                | Espaçamento em **grid 4/8px**; alturas de linha e tamanhos de título consistentes; **cards** com mesma sombra/borda em todo o painel (tokens Tailwind centralizados).                                    |
+| **Fluidez entre ecrãs**         | **View Transitions** (React 19 / Next) ou transições **CSS leves** entre rotas do painel — evitar “flash” branco; **Suspense** com fallbacks alinhados ao layout final para **sem layout shift** (CLS).  |
+| **Micro-interacções**           | Hover/focus em linhas de tabela, botões e `DropdownMenu` com transições **curtas** (150–200ms); estados `disabled` com explicação (tooltip “Pausa o serviço primeiro”).                                  |
+| **Fluxos completos**            | Cada fluxo tem **início → carregamento → sucesso → erro → recuperação**: upload de CV, gerar estratégia com IA, iniciar hunt, ver live, exportar CSV. Não deixar “dead ends” sem próximo passo sugerido. |
+| **Optimistic UI (onde seguro)** | Marcar candidatura como “applied” pode actualizar a linha **antes** da resposta do servidor, com **reversão** se falhar — só onde o risco for aceitável.                                                 |
+| **Comando e velocidade**        | **Paleta de comandos** (`Command` + atalho tipo `⌘K`) para saltar para Hunts, Candidaturas, Configuração — sensação “pro” sem obrigar rato. Atalhos documentados em `?` ou tooltip.                      |
+| **Densidade controlada**        | Modo “compacto” opcional em tabelas (menos padding) para power users; **default** confortável para leitura longa.                                                                                        |
+| **Mobile / tablet**             | Sidebar colapsável ou navegação inferior em viewports pequenas; **áreas de toque** ≥ 44px; tabelas com **scroll horizontal** claro ou vista em cards empilhados.                                         |
+| **Live / SSE**                  | Stream de eventos com **auto-scroll** opcional, **pausa** no scroll manual, contador “última actualização há Xs” — evita sensação de log a “piscar” sem contexto.                                        |
+| **Profundidade sem ruído**      | Sombras **em camadas** (elevação 1–2 níveis), bordas `border` subtis em vez de tudo flat; **separadores** consistentes — detalhe que transmite “acabado”.                                                |
 
 **Resumo:** premium = **tokens + motion contida + zero dead ends + fluxos fechados + comando rápido + responsivo honesto**. O shadcn dá os blocos; o **design system** (documentar `globals.css` + variantes) é o que unifica tudo numa experiência **fluida** de ponta a ponta.
 
@@ -215,16 +215,16 @@ Aqui “premium” não significa ornamentos pesados: significa **consistência*
 
 Tabelas conceituais (nomes ajustáveis):
 
-| Tabela | Função |
-|--------|--------|
-| `profiles` | Dados do utilizador; **`user_id` TEXT/UUID** = identificador da sessão NextAuth (não `auth.users` do Supabase) |
-| `cvs` | Metadados, `storage_path`, texto extraído (opcional), hash; FK `user_id` |
-| `strategies` | JSON de critérios + texto derivado; FK `user_id`, `cv_id` opcional |
-| `hunts` | Execução: `started_at`, `finished_at`, `status`, `strategy_id`, `user_id` |
-| `openings` | Vaga; pode ser global ou por ecossistema |
-| `applications` | **Pipeline:** `user_id`, hunt, opening, **`opening_url`**, `status`, `match_score`, timestamps |
-| `hunt_events` | Log append-only para live feed |
-| `jobs` | Fila do worker (inclui `user_id`) |
+| Tabela         | Função                                                                                                         |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| `profiles`     | Dados do utilizador; **`user_id` TEXT/UUID** = identificador da sessão NextAuth (não `auth.users` do Supabase) |
+| `cvs`          | Metadados, `storage_path`, texto extraído (opcional), hash; FK `user_id`                                       |
+| `strategies`   | JSON de critérios + texto derivado; FK `user_id`, `cv_id` opcional                                             |
+| `hunts`        | Execução: `started_at`, `finished_at`, `status`, `strategy_id`, `user_id`                                      |
+| `openings`     | Vaga; pode ser global ou por ecossistema                                                                       |
+| `applications` | **Pipeline:** `user_id`, hunt, opening, **`opening_url`**, `status`, `match_score`, timestamps                 |
+| `hunt_events`  | Log append-only para live feed                                                                                 |
+| `jobs`         | Fila do worker (inclui `user_id`)                                                                              |
 
 ### 6.1 Segurança sem Supabase Auth (padrão recomendado)
 
@@ -243,11 +243,11 @@ Se quiseres **defesa em profundidade** mesmo com credenciais de servidor: polít
 
 ## 7. Migração futura (fora do Supabase)
 
-| Peça hoje | Troca típica |
-|-----------|----------------|
-| Postgres no Supabase | Neon, Railway, RDS, Cloud SQL — **mesmo SQL**, migrar `DATABASE_URL` |
-| Storage | bucket **S3**, MinIO, Cloudflare R2 — ajustar SDK e variáveis |
-| Auth | **Mantém-se** Google OAuth via Auth.js — **não** há dependência de `auth.users` do Supabase |
+| Peça hoje            | Troca típica                                                                                |
+| -------------------- | ------------------------------------------------------------------------------------------- |
+| Postgres no Supabase | Neon, Railway, RDS, Cloud SQL — **mesmo SQL**, migrar `DATABASE_URL`                        |
+| Storage              | bucket **S3**, MinIO, Cloudflare R2 — ajustar SDK e variáveis                               |
+| Auth                 | **Mantém-se** Google OAuth via Auth.js — **não** há dependência de `auth.users` do Supabase |
 
 ---
 
@@ -255,13 +255,13 @@ Se quiseres **defesa em profundidade** mesmo com credenciais de servidor: polít
 
 ### 8.1 Estrutura e configuração
 
-- **`user-prompt` como schema:** JSON/YAML validado (Zod) — alinha com `strategies` e com o assistente IA.
-- **Variáveis de ambiente** em `main.sh` (`AI_MODEL`, etc.).
-- **Script único** `yarn hunt` (quando existir no `package.json` da raiz).
+- **Estratégia como schema:** JSON validado (Zod) — alinha com `strategies` e com o assistente IA.
+- **Variáveis de ambiente** centralizadas em `.env` na raiz do monorepo.
+- **Scripts únicos** na raiz para `dev`, `worker` e `mcp:server`.
 
 ### 8.2 Processo e qualidade
 
-- CI: validação de exemplos, `shellcheck` em `main.sh`.
+- CI: lint/typecheck/build web + worker.
 - Documentar ToS (Indeed, GitHub API).
 
 ### 8.3 Segurança
@@ -276,14 +276,14 @@ Se quiseres **defesa em profundidade** mesmo com credenciais de servidor: polít
 
 ## 9. Roadmap em fases (actualizado)
 
-| Fase | Entregável |
-|------|------------|
-| **0** | Este documento + decisões (pause, estados de candidatura). |
-| **1** | Projeto Supabase: **só** Postgres + Storage; schema; seed local; políticas mínimas (service role). |
+| Fase  | Entregável                                                                                                                               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **0** | Este documento + decisões (pause, estados de candidatura).                                                                               |
+| **1** | Projeto Supabase: **só** Postgres + Storage; schema; seed local; políticas mínimas (service role).                                       |
 | **2** | Next.js 16 + **shadcn** + **Drizzle**: **Auth.js + Google**, CRUD de estratégia manual, candidaturas + URL (tudo via API com `user_id`). |
-| **3** | Assistente IA “CV → estratégia”; worker grava hunts/applications. |
-| **4** | Live via **SSE**; relatórios por período; Docker do worker. |
-| **5** | Hardening, alertas webhook, agendamento. |
+| **3** | Assistente IA “CV → estratégia”; worker grava hunts/applications.                                                                        |
+| **4** | Live via **SSE**; relatórios por período; Docker do worker.                                                                              |
+| **5** | Hardening, alertas webhook, agendamento.                                                                                                 |
 
 ---
 
@@ -293,20 +293,20 @@ Objetivo: **minimizar SaaS pago** e **tokens LLM**; aceitar mais trabalho de eng
 
 ### 10.1 Infraestrutura
 
-| Item | Abordagem económica |
-|------|---------------------|
-| **Supabase** | Plano **Free** para **Postgres + Storage** (sem contar MAU de Auth Supabase — **não usas**). Monitorizar armazenamento, egress e linhas; comprimir PDFs antigos. |
-| **Google OAuth** | Uso típico **sem custo** para app OAuth standard; rever quotas na consola Google Cloud. |
-| **Front** | **Vercel Hobby** ou Docker numa VPS pequena com Caddy. |
-| **Worker** | VPS ou homelab; GitHub Actions cron só se for fiável com MCP. |
-| **Domínio** | Opcional no início. |
+| Item             | Abordagem económica                                                                                                                                              |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Supabase**     | Plano **Free** para **Postgres + Storage** (sem contar MAU de Auth Supabase — **não usas**). Monitorizar armazenamento, egress e linhas; comprimir PDFs antigos. |
+| **Google OAuth** | Uso típico **sem custo** para app OAuth standard; rever quotas na consola Google Cloud.                                                                          |
+| **Front**        | **Vercel Hobby** ou Docker numa VPS pequena com Caddy.                                                                                                           |
+| **Worker**       | VPS ou homelab; GitHub Actions cron só se for fiável com MCP.                                                                                                    |
+| **Domínio**      | Opcional no início.                                                                                                                                              |
 
 ### 10.2 Modelos para “CV → estratégia” (por ordem de “barateza”)
 
 1. **Só regras + extração local (0 €).**
 2. **Ollama** local ou na VPS.
 3. **Gemini / Groq** com prompt curto + cache por hash do CV.
-4. **Claude / OpenAI** só na **hunt** com ferramentas.
+4. **Groq/OpenAI** apenas onde houver ganho real de ranking (com fallback heurístico).
 
 ### 10.3 Onde **não** poupar sem análise
 
@@ -334,39 +334,39 @@ Esta secção lista **buracos típicos** entre a visão e um produto fiável em 
 
 ### 12.1 Produto e confiança
 
-| Lacuna | Porque importa | Direcção |
-|--------|----------------|----------|
-| **Páginas legais** (`/privacidade`, `/termos`) | CV e histórico de candidaturas são PII; utilizadores (e tu) precisam de clareza sobre retenção e uso de IA. | Textos curtos, versão MVPl; link no login e no footer. |
-| **Exportar / apagar os meus dados (LGPD)** | Direito de portabilidade e apagamento. | Endpoint ou acção “Descarregar JSON” + “Apagar conta e CVs” com confirmação dupla. |
-| **Onboarding guiado** | Sem isto, o painel parece vazio e frágil. | Primeira visita: checklist (login → CV → estratégia → primeira hunt). |
-| **Gestão de expectativas sobre a IA** | Evitar frustração (“porque não encontrou X?”). | Textos de ajuda: a IA sugere; plataforma Indeed/GitHub mudam; scores são heurísticos. |
+| Lacuna                                         | Porque importa                                                                                              | Direcção                                                                              |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| **Páginas legais** (`/privacidade`, `/termos`) | CV e histórico de candidaturas são PII; utilizadores (e tu) precisam de clareza sobre retenção e uso de IA. | Textos curtos, versão MVPl; link no login e no footer.                                |
+| **Exportar / apagar os meus dados (LGPD)**     | Direito de portabilidade e apagamento.                                                                      | Endpoint ou acção “Descarregar JSON” + “Apagar conta e CVs” com confirmação dupla.    |
+| **Onboarding guiado**                          | Sem isto, o painel parece vazio e frágil.                                                                   | Primeira visita: checklist (login → CV → estratégia → primeira hunt).                 |
+| **Gestão de expectativas sobre a IA**          | Evitar frustração (“porque não encontrou X?”).                                                              | Textos de ajuda: a IA sugere; plataforma Indeed/GitHub mudam; scores são heurísticos. |
 
 ### 12.2 Dados, deduplicação e consistência
 
-| Lacuna | Porque importa | Direcção |
-|--------|----------------|----------|
-| **Chave canónica de vaga** | Evitar duplicar a mesma URL em `openings` / `applications`. | Normalizar URL (strip utm, trailing slash); `unique (user_id, normalized_url)` ou global por `platform + external_id`. |
-| **Concorrência entre hunts** | Duas execuções ao mesmo tempo podem duplicar trabalho ou esgotar quota. | Fila com “máx. 1 hunt activa por `user_id`” ou lock optimista na API. |
-| **Versão do `system-prompt` / da estratégia** | Relatórios “por período” precisam saber **com que regras** se caçou. | `hunts.strategy_snapshot_json` imutável ao iniciar a hunt. |
-| **Reprocessamento / retry idempotente** | Workers caem. | `jobs` com estado `attempts`, `next_run_at`, dedup por `idempotency_key`. |
+| Lacuna                                        | Porque importa                                                          | Direcção                                                                                                               |
+| --------------------------------------------- | ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| **Chave canónica de vaga**                    | Evitar duplicar a mesma URL em `openings` / `applications`.             | Normalizar URL (strip utm, trailing slash); `unique (user_id, normalized_url)` ou global por `platform + external_id`. |
+| **Concorrência entre hunts**                  | Duas execuções ao mesmo tempo podem duplicar trabalho ou esgotar quota. | Fila com “máx. 1 hunt activa por `user_id`” ou lock optimista na API.                                                  |
+| **Versão do `system-prompt` / da estratégia** | Relatórios “por período” precisam saber **com que regras** se caçou.    | `hunts.strategy_snapshot_json` imutável ao iniciar a hunt.                                                             |
+| **Reprocessamento / retry idempotente**       | Workers caem.                                                           | `jobs` com estado `attempts`, `next_run_at`, dedup por `idempotency_key`.                                              |
 
 ### 12.3 Segurança e abuso
 
-| Lacuna | Porque importa | Direcção |
-|--------|----------------|----------|
-| **Rate limit na API** | Evitar brute-force e picos acidentais. | `limit` por IP/sessão em rotas de login e de disparo de hunt (middleware ou upstash-free se necessário). |
-| **Limites de upload** | PDFs enormes custam storage e CPU de parsing. | Tamanho máx. (ex. 10 MB), MIME allowlist. |
-| **Segredos do worker (Claude, MCP)** | Fuga = conta comprometida. | Só env vars no runtime Docker; rotação documentada; nunca logar tokens. |
-| **CSRF / origem** | Server Actions e cookies de sessão. | Seguir defaults Auth.js + `SameSite`; rever CORS se API pública no futuro. |
+| Lacuna                                      | Porque importa                                | Direcção                                                                                                 |
+| ------------------------------------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Rate limit na API**                       | Evitar brute-force e picos acidentais.        | `limit` por IP/sessão em rotas de login e de disparo de hunt (middleware ou upstash-free se necessário). |
+| **Limites de upload**                       | PDFs enormes custam storage e CPU de parsing. | Tamanho máx. (ex. 10 MB), MIME allowlist.                                                                |
+| **Segredos do worker (MCP, APIs externas)** | Fuga = conta comprometida.                    | Só env vars no runtime Docker; rotação documentada; nunca logar tokens.                                  |
+| **CSRF / origem**                           | Server Actions e cookies de sessão.           | Seguir defaults Auth.js + `SameSite`; rever CORS se API pública no futuro.                               |
 
 ### 12.4 Operação e qualidade
 
-| Lacuna | Porque importa | Direcção |
-|--------|----------------|----------|
-| **Backups Postgres + Storage** | Plano free não substitui estratégia de restore. | Exportações agendadas (dump) ou replicação quando orçamento permitir. |
-| **Correlação de logs** | Debug de hunts falhadas. | `hunt_id` / `job_id` em todos os logs estruturados (API + worker). |
-| **Testes** | Regressões em Drizzle/schema. | Testes de integração em queries críticas; smoke E2E no login + lista candidaturas. |
-| **i18n** | Público-alvo BR. | **pt-BR** como default em copy e `date-fns`/Intl; inglês só se fizer sentido depois. |
+| Lacuna                         | Porque importa                                  | Direcção                                                                             |
+| ------------------------------ | ----------------------------------------------- | ------------------------------------------------------------------------------------ |
+| **Backups Postgres + Storage** | Plano free não substitui estratégia de restore. | Exportações agendadas (dump) ou replicação quando orçamento permitir.                |
+| **Correlação de logs**         | Debug de hunts falhadas.                        | `hunt_id` / `job_id` em todos os logs estruturados (API + worker).                   |
+| **Testes**                     | Regressões em Drizzle/schema.                   | Testes de integração em queries críticas; smoke E2E no login + lista candidaturas.   |
+| **i18n**                       | Público-alvo BR.                                | **pt-BR** como default em copy e `date-fns`/Intl; inglês só se fizer sentido depois. |
 
 ### 12.5 Features complementares (backlog)
 
@@ -389,4 +389,4 @@ Esta secção lista **buracos típicos** entre a visão e um produto fiável em 
 
 ---
 
-*Decisão actual: **Google OAuth via Auth.js**; **Supabase apenas Postgres + Storage**; **Drizzle** como ORM; **shadcn/ui** com **acabamento premium** e fluxos fluidos (secções 5.2–5.3); live preferencialmente **SSE no Next** para reduzir acoplamento e facilitar migração.*
+_Decisão actual: **Google OAuth via Auth.js**; **Supabase apenas Postgres + Storage**; **Drizzle** como ORM; **shadcn/ui** com **acabamento premium** e fluxos fluidos (secções 5.2–5.3); live preferencialmente **SSE no Next** para reduzir acoplamento e facilitar migração._

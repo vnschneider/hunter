@@ -3,11 +3,17 @@
   "version": "1.0.0",
   "private": true,
   "description": "Hunter — caça de vagas (CLI + plataforma web)",
-  "workspaces": ["apps/*", "packages/*"],
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
     "dev": "yarn workspace web dev",
     "build": "yarn workspace web build",
     "lint": "yarn workspace web lint",
+    "mcp:server": "yarn workspace web mcp:server",
+    "worker": "yarn workspace web worker",
+    "worker:once": "yarn workspace web worker:once",
     "auth:secret": "node -e \"console.log(require('crypto').randomBytes(32).toString('base64'))\"",
     "db:generate": "yarn workspace @hunter/db generate",
     "db:push": "yarn workspace @hunter/db push",
@@ -19,7 +25,7 @@
   },
   "license": "ISC",
   "dependencies": {
-    "@anthropic-ai/claude-code": "^2.1.80",
+    "dotenv": "^17.3.1",
     "gh": "^2.8.9"
   }
 }

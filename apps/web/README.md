@@ -15,7 +15,7 @@
    yarn auth:secret
    ```
 
-   Copia o output para `apps/web/.env.local`:
+   Copia o output para o arquivo `.env` da raiz:
 
    ```env
    AUTH_SECRET="cole-o-valor-aqui"
@@ -24,16 +24,18 @@
    DATABASE_URL=""
    ```
 
-2. Instala dependências na raiz: `yarn install`
+2. Se ainda não existir, cria `.env` na raiz com base em `.env.example`.
 
-3. Migrações Drizzle (com `DATABASE_URL` definido):
+3. Instala dependências na raiz: `yarn install`
+
+4. Migrações Drizzle (com `DATABASE_URL` definido):
 
    ```bash
    yarn db:generate
    yarn db:push
    ```
 
-4. Dev:
+5. Dev:
 
    ```bash
    yarn dev

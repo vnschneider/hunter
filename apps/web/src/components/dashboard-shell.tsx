@@ -3,6 +3,7 @@ import Image from "next/image";
 import type { User } from "next-auth";
 import { signOut } from "@/auth";
 import { Button } from "@/components/ui/button";
+import { NotificationsCenter } from "@/components/notifications-center";
 import {
   Briefcase,
   ClipboardList,
@@ -16,7 +17,11 @@ const nav = [
   { href: "/dashboard", label: "Resumo", icon: LayoutDashboard },
   { href: "/dashboard/strategies", label: "Estratégias", icon: Target },
   { href: "/dashboard/hunts", label: "Caçadas", icon: Briefcase },
-  { href: "/dashboard/applications", label: "Candidaturas", icon: ClipboardList },
+  {
+    href: "/dashboard/applications",
+    label: "Candidaturas",
+    icon: ClipboardList,
+  },
   { href: "/dashboard/settings", label: "Definições", icon: Settings },
 ];
 
@@ -64,7 +69,9 @@ export function DashboardShell({
               </div>
             )}
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{user.name ?? "Conta"}</p>
+              <p className="truncate text-sm font-medium">
+                {user.name ?? "Conta"}
+              </p>
               <p className="truncate text-xs text-muted-foreground">
                 {user.email}
               </p>
@@ -89,6 +96,9 @@ export function DashboardShell({
         </div>
       </aside>
       <div className="flex flex-1 flex-col pl-64">
+        <header className="flex items-center justify-end border-b border-border bg-card/60 px-8 py-3">
+          <NotificationsCenter />
+        </header>
         <main className="flex-1 p-8">{children}</main>
       </div>
     </div>

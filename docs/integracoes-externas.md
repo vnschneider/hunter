@@ -6,15 +6,14 @@ Inventário de **serviços fora** do repo, **dados** que entram/saem, **autentic
 
 ## 1. Mapa resumo
 
-| Sistema | Direcção | Auth | Uso no Hunter |
-|---------|----------|------|----------------|
-| **Google OAuth** | Entrada | OAuth 2.0 / OpenID | Login no painel (Auth.js) |
-| **Postgres (Supabase)** | App ↔ BD | `DATABASE_URL` (servidor + worker) | Dados persistentes |
-| **Storage (Supabase)** | App ↔ bucket | `service_role` servidor | CVs, exports CSV opcionais |
-| **Indeed MCP** | Worker → Indeed | Config MCP / sessão conforme doc Indeed | Pesquisa de vagas no agente |
-| **GitHub API** | Worker/agente → GitHub | `GITHUB_TOKEN` (PAT) | Issues `backend-br/vagas`, `frontendbr/vagas` |
-| **Anthropic / Claude** | Worker → API ou CLI | API key ou login CLI | Agente de caça |
-| **LLM “barato”** (opcional) | Next API → API | Chave por fornecedor | CV → estratégia (Gemini, Groq, Ollama local) |
+| Sistema                     | Direcção                     | Auth                               | Uso no Hunter                                 |
+| --------------------------- | ---------------------------- | ---------------------------------- | --------------------------------------------- |
+| **Google OAuth**            | Entrada                      | OAuth 2.0 / OpenID                 | Login no painel (Auth.js)                     |
+| **Postgres (Supabase)**     | App ↔ BD                     | `DATABASE_URL` (servidor + worker) | Dados persistentes                            |
+| **Storage (Supabase)**      | App ↔ bucket                 | `service_role` servidor            | CVs, exports CSV opcionais                    |
+| **Hunter MCP local**        | Worker → conectores externos | Variáveis de ambiente por conector | Pesquisa, dedupe e score de vagas             |
+| **GitHub API**              | Worker/agente → GitHub       | `GITHUB_TOKEN` (PAT)               | Issues `backend-br/vagas`, `frontendbr/vagas` |
+| **LLM “barato”** (opcional) | Next API → API               | Chave por fornecedor               | CV → estratégia (Gemini, Groq, Ollama local)  |
 
 ---
 
@@ -51,13 +50,14 @@ Inventário de **serviços fora** do repo, **dados** que entram/saem, **autentic
 
 ---
 
-## 5. Indeed — MCP
+## 5. Hunter MCP (server local)
 
-- Configuração típica remota: URL tipo `https://mcp.indeed.com/...` (ver `.mcp.json` actual e documentação Indeed).
-- **O agente** (Claude com MCP) consome as ferramentas expostas — não o browser directamente.
-- **Riscos:** ToS, disponibilidade, necessidade de sessão/browser em alguns fluxos — validar em ambiente **não interactivo**.
+- Servidor em `apps/web/scripts/mcp/hunter-mcp-server.mjs`, invocado pelo worker via stdio.
+- Conectores atuais: GitHub, Greenhouse e Lever.
+- Configuração por env (`GITHUB_TOKEN`, `GREENHOUSE_BOARD_TOKENS`, `LEVER_SITES`).
+- **Riscos:** rate limits de API externas e disponibilidade de provedores.
 
-**Custo:** conforme Indeed / produto MCP; rever termos.
+**Custo:** depende apenas das APIs externas e do provedor de score (Groq opcional).
 
 ---
 
@@ -71,56 +71,41 @@ Inventário de **serviços fora** do repo, **dados** que entram/saem, **autentic
 
 ---
 
-## 7. Anthropic / Claude (agente)
+## 7. LLMs para “CV → estratégia” (opcional)
 
-- **Modo CLI (`claude`):** autenticação `claude auth login` em build/deploy (frágil em CI) ou variável de ambiente se suportado.
-- **Modo API:** `ANTHROPIC_API_KEY` — facturado por token.
-
-**Boas práticas:**
-
-- Limitar `max_tokens` e número de *turns* por hunt no worker.
-- Não enviar CV completo se o system prompt só precisar de resumo — reduzir PII em logs.
-
-**Custo:** principal variável do produto — ver [plataforma-visao.md](plataforma-visao.md) secção orçamento.
-
----
-
-## 8. LLMs para “CV → estratégia” (opcional)
-
-| Opção | Autenticação | Nota |
-|-------|----------------|------|
-| **Ollama** | Nenhuma (local) | Sem custo cloud; GPU/RAM |
-| **Google Gemini** | API key Google AI Studio | Free tier com limites |
-| **Groq** | API key | Latência baixa; limites free |
-| **OpenAI** | API key | Pago / free trial |
+| Opção             | Autenticação             | Nota                         |
+| ----------------- | ------------------------ | ---------------------------- |
+| **Ollama**        | Nenhuma (local)          | Sem custo cloud; GPU/RAM     |
+| **Google Gemini** | API key Google AI Studio | Free tier com limites        |
+| **Groq**          | API key                  | Latência baixa; limites free |
+| **OpenAI**        | API key                  | Pago / free trial            |
 
 Fluxo: texto extraído do PDF → **um** request com schema JSON (Zod) → guardar `strategies`.
 
 ---
 
-## 9. Outros dados externos (futuro)
+## 8. Outros dados externos (futuro)
 
 - **Gupy / páginas de emprego:** scraping ou redirect manual — **ToS** e **CAPTCHA**; MVP pode só guardar **URL** e abrir no utilizador.
 - **E-mail transaccional (Resend, etc.):** API key; alertas “hunt concluída”.
 
 ---
 
-## 10. Checklist de segredos (nunca no cliente)
+## 9. Checklist de segredos (nunca no cliente)
 
-| Segredo | Onde |
-|---------|------|
-| `DATABASE_URL` | Next server, worker |
+| Segredo                     | Onde                                       |
+| --------------------------- | ------------------------------------------ |
+| `DATABASE_URL`              | Next server, worker                        |
 | `SUPABASE_SERVICE_ROLE_KEY` | Next server, worker (se Storage no worker) |
-| `GITHUB_TOKEN` | Worker |
-| `ANTHROPIC_API_KEY` | Worker |
-| Chaves LLM secundárias | Next server (route de estratégia) |
-| OAuth client secret | Next server apenas |
+| `GITHUB_TOKEN`              | Worker                                     |
+| Chaves LLM secundárias      | Next server (route de estratégia)          |
+| OAuth client secret         | Next server apenas                         |
 
 Rotacionar em vazamento; usar gestão de env no deploy (Vercel, Docker secrets).
 
 ---
 
-## 11. Referências
+## 10. Referências
 
 - [GitHub REST](https://docs.github.com/en/rest)
 - [Supabase Storage](https://supabase.com/docs/guides/storage)
