@@ -11,6 +11,7 @@ const IMPORTANT_EVENTS = [
   "interesting_opening_found",
   "application_created",
   "hunt_warning",
+  "auto_apply_completed",
   "hunt_completed",
   "hunt_failed",
   "hunt_stopped",

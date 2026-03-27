@@ -58,7 +58,7 @@ yarn mcp:server
 
 ## Docker (somente worker por padrão)
 
-`docker compose up -d` sobe `postgres` + `worker`.
+`docker compose up -d` sobe apenas `worker` (DB remoto via `DATABASE_URL`, ex.: Supabase).
 
 Para subir também o web:
 

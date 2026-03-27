@@ -42,6 +42,8 @@ function formatPhase(phase: string) {
       return "Persistindo resultados";
     case "persist_done":
       return "Persistência concluída";
+    case "application_plan_ready":
+      return "Plano de candidaturas";
     case "mcp_pipeline_done":
       return "Busca concluída";
     case "pipeline_heartbeat":
@@ -90,6 +92,14 @@ export function ApplicationsLivePreview({ hunts }: Props) {
       totalToPersist:
         typeof payload.totalToPersist === "number"
           ? Number(payload.totalToPersist)
+          : null,
+      autoApplyCandidates:
+        typeof payload.autoApplyCandidates === "number"
+          ? Number(payload.autoApplyCandidates)
+          : null,
+      draftsCount:
+        typeof payload.draftsCount === "number"
+          ? Number(payload.draftsCount)
           : null,
       message:
         typeof payload.message === "string" && payload.message.trim().length > 0
@@ -225,6 +235,10 @@ export function ApplicationsLivePreview({ hunts }: Props) {
           {typeof latestProgress.totalToPersist === "number"
             ? ` / ${latestProgress.totalToPersist}`
             : ""}
+        </p>
+        <p>
+          Plano: {latestProgress.autoApplyCandidates ?? "-"} auto |{" "}
+          {latestProgress.draftsCount ?? "-"} revisão
         </p>
       </div>
 

@@ -54,6 +54,7 @@ export async function listApplicationsWithOpenings(userId: string) {
       openingUrl: applications.openingUrl,
       status: applications.status,
       matchScore: applications.matchScore,
+      notes: applications.notes,
       createdAt: applications.createdAt,
       updatedAt: applications.updatedAt,
       title: openings.title,

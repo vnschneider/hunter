@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { NotificationsCenter } from "@/components/notifications-center";
 import {
   Briefcase,
+  ChartColumn,
   ClipboardList,
   LayoutDashboard,
   Settings,
@@ -22,6 +23,7 @@ const nav = [
     label: "Candidaturas",
     icon: ClipboardList,
   },
+  { href: "/dashboard/reports", label: "Relatórios", icon: ChartColumn },
   { href: "/dashboard/settings", label: "Definições", icon: Settings },
 ];
 

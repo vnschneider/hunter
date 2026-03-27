@@ -69,6 +69,19 @@ const statusLabel: Record<string, string> = {
   skipped: "Ignorada",
 };
 
+function extractTailoredPdfPath(notes: string | null) {
+  if (!notes) return null;
+  try {
+    const parsed = JSON.parse(notes) as {
+      tailoredResume?: { pdfStoragePath?: string | null };
+    };
+    const path = parsed?.tailoredResume?.pdfStoragePath;
+    return path ? String(path) : null;
+  } catch {
+    return null;
+  }
+}
+
 export default async function ApplicationsPage({ searchParams }: PageProps) {
   const userId = await requireUserId();
   const dbOk = hasDatabase();
@@ -396,53 +409,72 @@ export default async function ApplicationsPage({ searchParams }: PageProps) {
                 <th className="px-4 py-3 font-medium">Estado</th>
                 <th className="px-4 py-3 font-medium">Data</th>
                 <th className="px-4 py-3 font-medium">Link</th>
+                <th className="px-4 py-3 font-medium">CV ATS</th>
                 <th className="px-4 py-3 font-medium">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {rowsRanked.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-b border-border/60 last:border-0"
-                >
-                  <td className="px-4 py-3">
-                    <div className="max-w-[280px] font-medium leading-snug">
-                      {r.title}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {r.platform}
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.matchScore != null ? `${r.matchScore}` : "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Badge variant={statusBadgeVariant(r.status)}>
-                      {statusLabel[r.status] ?? r.status}
-                    </Badge>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {new Date(r.createdAt).toLocaleDateString("pt-BR")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <Link
-                      href={r.openingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
-                    >
-                      Abrir
-                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3">
-                    <ApplicationsActionsCell
-                      applicationId={r.id}
-                      status={r.status}
-                    />
-                  </td>
-                </tr>
-              ))}
+              {rowsRanked.map((r) => {
+                const tailoredPdfPath = extractTailoredPdfPath(r.notes);
+                return (
+                  <tr
+                    key={r.id}
+                    className="border-b border-border/60 last:border-0"
+                  >
+                    <td className="px-4 py-3">
+                      <div className="max-w-[280px] font-medium leading-snug">
+                        {r.title}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {r.platform}
+                    </td>
+                    <td className="px-4 py-3">
+                      {r.matchScore != null ? `${r.matchScore}` : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Badge variant={statusBadgeVariant(r.status)}>
+                        {statusLabel[r.status] ?? r.status}
+                      </Badge>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-muted-foreground">
+                      {new Date(r.createdAt).toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={r.openingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline"
+                      >
+                        Abrir
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      {tailoredPdfPath ? (
+                        <Link
+                          href={`/api/applications/${r.id}/tailored-resume`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-primary hover:underline"
+                        >
+                          Baixar PDF
+                          <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                        </Link>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <ApplicationsActionsCell
+                        applicationId={r.id}
+                        status={r.status}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -1,5 +1,6 @@
 import { cvs } from "@hunter/db/schema";
 import { NoDatabaseBanner } from "@/components/no-database-banner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDb } from "@/lib/db";
 import { hasDatabase, requireUserId } from "@/lib/session";
 import { desc, eq } from "drizzle-orm";
@@ -35,6 +36,30 @@ export default async function SettingsPage() {
       {!dbOk ? <NoDatabaseBanner /> : null}
 
       <CVAnalysisForm savedCvs={savedCvs} />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notificações e relatórios</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-2 text-sm text-muted-foreground">
+          <p>
+            O Hunter mantém notificações em tempo real dentro do painel e também
+            suporta envio externo por webhook e email (sem Discord).
+          </p>
+          <p>
+            Relatório JSON:{" "}
+            <span className="font-mono">
+              /api/reports/period?period=30&amp;minMatch=70
+            </span>
+          </p>
+          <p>
+            Relatório CSV:{" "}
+            <span className="font-mono">
+              /api/reports/period?period=30&amp;minMatch=70&amp;format=csv
+            </span>
+          </p>
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -23,6 +23,8 @@ function eventBadgeLabel(eventType: string) {
       return "Alerta";
     case "hunt_completed":
       return "Concluída";
+    case "auto_apply_completed":
+      return "Auto-apply";
     default:
       return "Caçada";
   }
@@ -46,6 +48,8 @@ function renderMessage(event: NotificationRow) {
       return "Nova candidatura criada.";
     case "hunt_completed":
       return "Caçada concluída.";
+    case "auto_apply_completed":
+      return "Auto-apply finalizado.";
     case "hunt_failed":
       return "Caçada falhou.";
     case "hunt_stopped":
